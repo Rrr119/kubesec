@@ -276,6 +276,14 @@ func NewRuleset(logger *zap.SugaredLogger, ruleIDs ...string) (*Ruleset, error) 
 			Kinds:     []string{"RoleBinding", "ClusterRoleBinding"},
 			Points:    -30,
 		},
+		{
+			Predicate: rules.HostPort,
+			ID:        "HostPort",
+			Selector:  "containers[] .ports[] .hostPort",
+			Reason:    "hostPort exposes the container's port directly on the host's network interface, bypassing the service mesh and potentially conflicting with other workloads",
+			Kinds:     []string{"Pod", "Deployment", "StatefulSet", "DaemonSet"},
+			Points:    -3,
+		},
 	}
 
 	// If no specific IDs were passed, return all rules.

@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid29554",
+  "B": "/home/dev/feedback/uid29554",
+  "sha": "1536cd11f24399f9c5a8a5b2f8214b86182232c9",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "controlplaneio",
+    "repo": "kubesec",
+    "sha": "1536cd11f24399f9c5a8a5b2f8214b86182232c9"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "kubesec",
+    "cloneUrl": "https://github.com/Rrr119/kubesec.git"
+  },
+  "at": "2026-11-20T06:00:29.399Z"
+}
