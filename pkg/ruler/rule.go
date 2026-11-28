@@ -16,14 +16,21 @@ func (e *NotSupportedError) Error() string {
 }
 
 type Rule struct {
-	ID        string           `json:"id" yaml:"id"`
-	Selector  string           `json:"selector" yaml:"selector"`
-	Reason    string           `json:"reason" yaml:"reason"`
-	Link      string           `json:"link,omitempty" yaml:"link,omitempty"`
-	Kinds     []string         `json:"kinds" yaml:"kinds"`
-	Points    int              `json:"points" yaml:"points"`
-	Advise    int              `json:"advise" yaml:"advise"`
-	Predicate func([]byte) int `json:"-" yaml:"-"`
+	ID            string           `json:"id" yaml:"id"`
+	Selector      string           `json:"selector" yaml:"selector"`
+	Reason        string           `json:"reason" yaml:"reason"`
+	Link          string           `json:"link,omitempty" yaml:"link,omitempty"`
+	Kinds         []string         `json:"kinds" yaml:"kinds"`
+	Points        int              `json:"points" yaml:"points"`
+	Advise        int              `json:"advise" yaml:"advise"`
+	Priority      int              `json:"priority" yaml:"priority"`
+	PriorityLabel string           `json:"priorityLabel" yaml:"priorityLabel"`
+	Impact        string           `json:"impact" yaml:"impact"`
+	ImpactScore   int              `json:"impactScore" yaml:"impactScore"`
+	Fields        []string         `json:"fields" yaml:"fields"`
+	Explanation   string           `json:"explanation" yaml:"explanation"`
+	Remediation   string           `json:"remediation" yaml:"remediation"`
+	Predicate     func([]byte) int `json:"-" yaml:"-"`
 }
 
 // Eval executes the predicate if the kind matches the rule

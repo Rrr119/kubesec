@@ -34,7 +34,13 @@
                 }
               },
               "properties": {
-                "points": "{{ .Points }}"
+                "points": "{{ .Points }}",
+                "priority": "{{ .Priority }}",
+                "priorityLabel": "{{ .PriorityLabel }}",
+                "impact": "{{ .Impact }}",
+                "fields": {{ joinStrings .Fields ", " | printf "%q" }},
+                "explanation": "{{ .Explanation }}",
+                "remediation": "{{ .Remediation }}"
               }
             }
           {{- end -}}
@@ -56,7 +62,14 @@
             "text": {{ endWithPeriod $res.Reason | printf "%q" }},
             "properties": {
               "score": "{{ $res.Points }}",
-              "selector": {{ escapeString $res.Selector | printf "%q" }}
+              "selector": {{ escapeString $res.Selector | printf "%q" }},
+              "priority": "{{ $res.Priority }}",
+              "priorityLabel": "{{ $res.PriorityLabel }}",
+              "impact": "{{ $res.Impact }}",
+              "field": {{ escapeString $res.Field | printf "%q" }},
+              "fields": {{ joinStrings $res.Fields ", " | printf "%q" }},
+              "explanation": "{{ $res.Explanation }}",
+              "remediation": "{{ $res.Remediation }}"
             }
           },
           "locations": [

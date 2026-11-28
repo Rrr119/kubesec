@@ -197,9 +197,72 @@ kubesec scan --rules RunAsNonRoot,SeccompAny,ApparmorAny kubesec-test.yaml
 ]
 ```
 
+##### Remediation Priorities
+
+Every score item keeps its original `selector`, `reason` and `points` fields.
+Each item also carries the operational context needed to act on it:
+
+| Field | Meaning |
+| --- | --- |
+| `priority` | Numeric urgency, `1` (highest) through `4` (lowest). |
+| `priorityLabel` | Human-readable label: `P0`, `P1`, `P2` or `P3`. |
+| `impact` | Blast radius: `host`, `cluster`, `workload`, `container` or `availability`. |
+| `impactScore` | Tie-break score used for impact-first ordering. |
+| `field` / `fields` | Concrete manifest path(s) to change, including the resource's pod-template prefix. |
+| `explanation` | Why the finding matters. |
+| `remediation` | Specific change that resolves the finding. |
+| `category` | `critical` (deduction) or `advise` (missed hardening). |
+
+`scoring.remediation` is the impact-first action list. It combines deductions
+and missed advisories, and is ordered by `priority`, then `impactScore`, then
+the existing points magnitude. The legacy `scoring.critical`,
+`scoring.advise` and `scoring.passed` arrays keep their historical points-based
+ordering, so existing consumers remain compatible.
+
+```json
+{
+  "score": -37,
+  "scoring": {
+    "remediation": [
+      {
+        "order": 1,
+        "priority": 1,
+        "priorityLabel": "P0",
+        "impact": "host",
+        "impactScore": 99,
+        "id": "Privileged",
+        "field": "spec.containers[*].securityContext.privileged",
+        "fields": [
+          "spec.containers[*].securityContext.privileged",
+          "spec.initContainers[*].securityContext.privileged"
+        ],
+        "reason": "Privileged containers can allow almost completely unrestricted host access",
+        "explanation": "A privileged container receives nearly all host capabilities and device access, so a compromised process can usually escape the container and control the node.",
+        "remediation": "Set securityContext.privileged to false or remove it, then grant only the individual capabilities the workload needs.",
+        "points": -30,
+        "category": "critical"
+      }
+    ]
+  }
+}
+```
+
+The priority rubric is deliberately impact-first rather than score-first:
+
+| Priority | Label | Typical findings |
+| --- | --- | --- |
+| `1` | `P0` | Host or cluster compromise: privileged containers, `SYS_ADMIN`, host namespaces, Docker socket, host `/proc`, anonymous RBAC bindings. |
+| `2` | `P1` | Container escape or credential exposure: privilege escalation, secrets in environment variables, unconfined seccomp/AppArmor, root execution, mounted service-account tokens. |
+| `3` | `P2` | Isolation hardening: read-only root filesystems, capability dropping, explicit service accounts, host aliases, high UID/GID, missing seccomp/AppArmor profiles. |
+| `4` | `P3` | Availability and capacity hygiene: CPU/memory requests and limits, StatefulSet volume access mode and storage requests. |
+
 ##### Example Table Output
 
 ![Table output](/doc/images/table-output.png)
+
+The table output includes a "Remediation priorities" table before the legacy
+detail tables. It shows the order, priority, impact, rule, field paths, why the
+finding matters and the fix.
 
 ### Print Rules
 
@@ -226,7 +289,16 @@ kubesec print-rules --format table
       "DaemonSet"
     ],
     "points": -7,
-    "advise": 0
+    "advise": 0,
+    "priority": 2,
+    "priorityLabel": "P1",
+    "impact": "container",
+    "impactScore": 86,
+    "fields": [
+      "$podSpec.containers[*].securityContext.allowPrivilegeEscalation"
+    ],
+    "explanation": "Allowing privilege escalation lets a process gain capabilities such as setuid or file capabilities after the container starts, turning a limited compromise into node-level compromise.",
+    "remediation": "Set securityContext.allowPrivilegeEscalation to false for every container and remove setuid binaries that are not required."
   },
 ...
 ]

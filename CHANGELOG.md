@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## Table of Contents
 
+- [Unreleased](#unreleased)
 - [2.15.0](#2150)
 - [2.14.2](#2142)
 - [2.14.1](#2141)
@@ -34,6 +35,13 @@ All notable changes to this project will be documented in this file.
 - [1.0.0](#100)
 
 ---
+
+## `Unreleased`
+
+- Add impact-first remediation priorities
+  - Every score item now includes `priority`, `impact`, concrete `field` paths, an explanation and a remediation
+  - Add `scoring.remediation`, ordered by impact rather than the total score
+  - Keep the existing `score`, `scoring.critical`, `scoring.advise` and `scoring.passed` output compatible
 
 ## `2.15.0`
 

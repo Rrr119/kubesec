@@ -278,6 +278,10 @@ func NewRuleset(logger *zap.SugaredLogger, ruleIDs ...string) (*Ruleset, error) 
 		},
 	}
 
+	for i := range allRules {
+		applyRuleGuidance(&allRules[i])
+	}
+
 	// If no specific IDs were passed, return all rules.
 	if len(ruleIDs) == 0 {
 		return &Ruleset{Rules: allRules, logger: logger}, nil
@@ -475,24 +479,27 @@ func (rs *Ruleset) checkRules(report Report, json []byte) Report {
 	for ruleRef := range ch {
 		appliedRules++
 
-		report.Rules = appendUniqueRule(report.Rules, ruleRef)
-
 		if ruleRef.Containers > 0 {
 			if ruleRef.Points >= 0 {
 				rs.logger.Debugf("positive score rule matched %v (%v points)", ruleRef.Selector, ruleRef.Points)
+				ruleRef.Category = "passed"
 				report.Score += ruleRef.Points
 				report.Scoring.Passed = append(report.Scoring.Passed, ruleRef)
 			}
 
 			if ruleRef.Points < 0 {
 				rs.logger.Debugf("negative score rule matched %v (%v points)", ruleRef.Selector, ruleRef.Points)
+				ruleRef.Category = "critical"
 				report.Score += ruleRef.Points
 				report.Scoring.Critical = append(report.Scoring.Critical, ruleRef)
 			}
 		} else if ruleRef.Points >= 0 {
 			rs.logger.Debugf("positive score rule failed %v (%v points)", ruleRef.Selector, ruleRef.Points)
+			ruleRef.Category = "advise"
 			report.Scoring.Advise = append(report.Scoring.Advise, ruleRef)
 		}
+
+		report.Rules = appendUniqueRule(report.Rules, ruleRef)
 	}
 
 	if appliedRules < 1 {
@@ -503,10 +510,12 @@ func (rs *Ruleset) checkRules(report Report, json []byte) Report {
 		report.Message = fmt.Sprintf("Failed with a score of %v points", report.Score)
 	}
 
-	// sort results into priority order
+	// Keep the legacy points-based order, then add the impact-first plan.
 	sort.Sort(RuleRefCustomOrder(report.Scoring.Critical))
 	sort.Sort(RuleRefCustomOrder(report.Scoring.Passed))
 	sort.Sort(RuleRefCustomOrder(report.Scoring.Advise))
+	report.Scoring.Remediation = prioritizedRemediation(report.Scoring.Critical, report.Scoring.Advise)
+	applyRemediationOrder(report.Scoring)
 
 	return report
 }
@@ -522,16 +531,95 @@ func eval(json []byte, rule Rule, ch chan RuleRef, wg *sync.WaitGroup) {
 		return
 	}
 
+	fields := resolveFields(rule.Fields, getKind(json))
+	field := ""
+	if len(fields) > 0 {
+		field = fields[0]
+	}
+
 	result := RuleRef{
-		Containers: containers,
-		ID:         rule.ID,
-		Points:     rule.Points,
-		Reason:     rule.Reason,
-		Selector:   rule.Selector,
-		Link:       rule.Link,
+		Containers:    containers,
+		ID:            rule.ID,
+		Points:        rule.Points,
+		Reason:        rule.Reason,
+		Selector:      rule.Selector,
+		Link:          rule.Link,
+		Priority:      rule.Priority,
+		PriorityLabel: rule.PriorityLabel,
+		Impact:        rule.Impact,
+		ImpactScore:   rule.ImpactScore,
+		Field:         field,
+		Fields:        fields,
+		Explanation:   rule.Explanation,
+		Remediation:   rule.Remediation,
 	}
 
 	ch <- result
+}
+
+func prioritizedRemediation(critical, advise []RuleRef) []RuleRef {
+	remediation := make([]RuleRef, 0, len(critical)+len(advise))
+	remediation = append(remediation, critical...)
+	remediation = append(remediation, advise...)
+
+	sort.Sort(RemediationOrder(remediation))
+	for i := range remediation {
+		remediation[i].Order = i + 1
+	}
+	return remediation
+}
+
+func applyRemediationOrder(scoring RuleScoring) {
+	// The scoring value is passed by value, but the backing arrays are shared
+	// with the caller. This lets legacy arrays expose the same impact rank
+	// without changing their historical points-based order.
+	orderByID := make(map[string]int, len(scoring.Remediation))
+	for _, item := range scoring.Remediation {
+		orderByID[item.ID] = item.Order
+	}
+	for i := range scoring.Critical {
+		scoring.Critical[i].Order = orderByID[scoring.Critical[i].ID]
+	}
+	for i := range scoring.Advise {
+		scoring.Advise[i].Order = orderByID[scoring.Advise[i].ID]
+	}
+}
+
+func getKind(json []byte) string {
+	jq := gojsonq.New().Reader(bytes.NewReader(json))
+	kind := jq.From("kind").Get()
+	if kind == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", kind)
+}
+
+func podSpecRoot(kind string) string {
+	switch kind {
+	case "Pod":
+		return "spec"
+	case "CronJob":
+		return "spec.jobTemplate.spec.template.spec"
+	case "Deployment", "StatefulSet", "DaemonSet", "Job", "ReplicaSet":
+		return "spec.template.spec"
+	default:
+		return ""
+	}
+}
+
+func resolveFields(fields []string, kind string) []string {
+	root := podSpecRoot(kind)
+	resolved := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if strings.HasPrefix(field, "$podSpec") {
+			if root == "" {
+				continue
+			}
+			field = root + strings.TrimPrefix(field, "$podSpec")
+		}
+		resolved = append(resolved, field)
+	}
+	return resolved
 }
 
 // getObjectName returns <kind>/<name>.<namespace>

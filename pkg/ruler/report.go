@@ -13,19 +13,30 @@ type Report struct {
 }
 
 type RuleScoring struct {
-	Critical []RuleRef `json:"critical,omitempty"`
-	Passed   []RuleRef `json:"passed,omitempty"`
-	Advise   []RuleRef `json:"advise,omitempty"`
+	Critical    []RuleRef `json:"critical,omitempty"`
+	Passed      []RuleRef `json:"passed,omitempty"`
+	Advise      []RuleRef `json:"advise,omitempty"`
+	Remediation []RuleRef `json:"remediation,omitempty"`
 }
 
 type RuleRef struct {
-	ID         string `json:"id"`
-	Selector   string `json:"selector"`
-	Reason     string `json:"reason"`
-	Weight     int    `json:"weight,omitempty"`
-	Link       string `json:"href,omitempty"`
-	Containers int    `json:"-"`
-	Points     int    `json:"points"`
+	ID            string   `json:"id"`
+	Selector      string   `json:"selector"`
+	Reason        string   `json:"reason"`
+	Weight        int      `json:"weight,omitempty"`
+	Link          string   `json:"href,omitempty"`
+	Containers    int      `json:"-"`
+	Points        int      `json:"points"`
+	Priority      int      `json:"priority"`
+	PriorityLabel string   `json:"priorityLabel"`
+	Impact        string   `json:"impact"`
+	ImpactScore   int      `json:"impactScore"`
+	Field         string   `json:"field"`
+	Fields        []string `json:"fields"`
+	Explanation   string   `json:"explanation"`
+	Remediation   string   `json:"remediation"`
+	Category      string   `json:"category,omitempty"`
+	Order         int      `json:"order,omitempty"`
 }
 
 // This implements a custom sort interface (Len, Swap, Less) for the report listing.
@@ -49,4 +60,32 @@ func (rr RuleRefCustomOrder) Less(i, j int) bool {
 		return rr[i].Points < rr[j].Points
 	}
 	return rr[i].Selector < rr[j].Selector
+}
+
+// RemediationOrder is the impact-first order used for the remedial action list.
+// It is deliberately separate from RuleRefCustomOrder so existing consumers of
+// critical/advise keep their historical points-based ordering.
+type RemediationOrder []RuleRef
+
+func (rr RemediationOrder) Len() int { return len(rr) }
+
+func (rr RemediationOrder) Swap(i, j int) { rr[i], rr[j] = rr[j], rr[i] }
+
+func (rr RemediationOrder) Less(i, j int) bool {
+	if rr[i].Priority != rr[j].Priority {
+		return rr[i].Priority < rr[j].Priority
+	}
+	if rr[i].ImpactScore != rr[j].ImpactScore {
+		return rr[i].ImpactScore > rr[j].ImpactScore
+	}
+	if rr[i].Points != rr[j].Points {
+		if rr[i].Points > 0 || rr[j].Points > 0 {
+			return rr[i].Points > rr[j].Points
+		}
+		return rr[i].Points < rr[j].Points
+	}
+	if rr[i].Category != rr[j].Category {
+		return rr[i].Category == "critical"
+	}
+	return rr[i].ID < rr[j].ID
 }

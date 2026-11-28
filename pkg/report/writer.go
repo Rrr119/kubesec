@@ -127,6 +127,9 @@ func NewTemplateWriter(output io.Writer, outputTemplate string) (*TemplateWriter
 			}
 			return resultSlice
 		},
+		"joinStrings": func(input []string, separator string) string {
+			return strings.Join(input, separator)
+		},
 	}).Parse(outputTemplate)
 	if err != nil {
 		return nil, err
@@ -190,6 +193,52 @@ func (tw TableWriter) Write(reports reports) error {
 		return err
 	}
 	pterm.Println()
+
+	// Impact-first remediation plan for operators. The legacy detail tables
+	// below keep their existing columns and points-based grouping.
+	for _, r := range reports {
+		if len(r.Scoring.Remediation) == 0 {
+			continue
+		}
+
+		pterm.DefaultSection.Printf("Remediation priorities for %s", pterm.LightCyan(r.Object))
+		pterm.Printf("File: %s\n", pterm.Gray(r.FileName))
+
+		var remediationData [][]string
+		remediationData = append(remediationData, []string{"Order", "Priority", "Impact", "Rule ID", "Field", "Why", "Fix", "Points"})
+		for _, rule := range r.Scoring.Remediation {
+			priority := pterm.LightYellow(rule.PriorityLabel)
+			switch rule.Priority {
+			case ruler.PriorityImmediate:
+				priority = pterm.LightRed(rule.PriorityLabel)
+			case ruler.PriorityHigh:
+				priority = pterm.LightMagenta(rule.PriorityLabel)
+			}
+
+			remediationData = append(remediationData, []string{
+				strconv.Itoa(rule.Order),
+				priority,
+				rule.Impact,
+				rule.ID,
+				strings.Join(rule.Fields, "\n"),
+				rule.Explanation,
+				rule.Remediation,
+				fmt.Sprintf("%d", rule.Points),
+			})
+		}
+
+		err := pterm.DefaultTable.
+			WithHasHeader().
+			WithBoxed(true).
+			WithRowSeparator("-").
+			WithHeaderStyle(pterm.NewStyle(pterm.FgWhite, pterm.Bold)).
+			WithData(remediationData).
+			Render()
+		if err != nil {
+			return err
+		}
+		pterm.Println()
+	}
 
 	// Detailed Tables for Each Report
 	for _, r := range reports {
